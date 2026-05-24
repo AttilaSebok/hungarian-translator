@@ -12,6 +12,10 @@ const errorBox = document.getElementById('errorBox');
 const copyBtn = document.getElementById('copyBtn');
 const speakBtn = document.getElementById('speakBtn');
 const ttsCheckbox = document.getElementById('ttsCheckbox');
+const editBtn = document.getElementById('editBtn');
+const editTextarea = document.getElementById('editTextarea');
+const retranslateBtn = document.getElementById('retranslateBtn');
+const originalCard = document.getElementById('originalCard');
 
 let recognition = null;
 let isRecording = false;
@@ -353,6 +357,58 @@ recordBtn.addEventListener('click', () => {
   } else {
     startRecording();
   }
+});
+
+// --- Edit & retranslate ---
+
+function enterEditMode() {
+  editTextarea.value = originalText.textContent;
+  originalCard.classList.add('editing');
+  editTextarea.focus();
+  editTextarea.setSelectionRange(editTextarea.value.length, editTextarea.value.length);
+}
+
+function exitEditMode() {
+  originalCard.classList.remove('editing');
+}
+
+editBtn.addEventListener('click', () => {
+  if (originalCard.classList.contains('editing')) {
+    exitEditMode();
+  } else if (originalText.textContent.trim()) {
+    enterEditMode();
+  }
+});
+
+retranslateBtn.addEventListener('click', async () => {
+  const text = editTextarea.value.trim();
+  if (!text) return;
+
+  originalText.textContent = text;
+  exitEditMode();
+  stopSpeaking();
+
+  results.classList.add('visible');
+  translationText.innerHTML = '<span class="skeleton">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>';
+  setStatus('loading');
+
+  try {
+    const translation = await translate(text);
+    lastTranslation = translation;
+    translationText.textContent = translation;
+    setStatus('done');
+    if (ttsEnabled) speak(translation);
+  } catch (err) {
+    translationText.textContent = '';
+    showError(err.message);
+    setStatus('idle');
+  }
+});
+
+// Close edit mode on Escape, retranslate on Ctrl+Enter
+editTextarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') exitEditMode();
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') retranslateBtn.click();
 });
 
 copyBtn.addEventListener('click', async () => {
