@@ -1,4 +1,4 @@
-const CACHE = 'hu-en-v9';
+const CACHE = 'hu-en-v10';
 const STATIC = ['/', '/style.css', '/app.js', '/manifest.json'];
 
 self.addEventListener('install', (e) => {

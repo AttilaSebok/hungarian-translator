@@ -19,6 +19,77 @@ let lastTranslation = '';
 let isSpeaking = false;
 let ttsEnabled = false;
 
+// --- Visualizer ---
+const visualizerCard = document.getElementById('visualizerCard');
+const waveCanvas = document.getElementById('waveCanvas');
+let audioCtx = null;
+let analyser = null;
+let mediaStream = null;
+let animationId = null;
+let smoothBars = null;
+
+function startVisualizer(stream) {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 64;
+  analyser.smoothingTimeConstant = 0.75;
+
+  const source = audioCtx.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = waveCanvas.offsetWidth;
+  const H = 64;
+  waveCanvas.width = W * dpr;
+  waveCanvas.height = H * dpr;
+  const ctx = waveCanvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const bins = analyser.frequencyBinCount;
+  const data = new Uint8Array(bins);
+  smoothBars = new Float32Array(bins).fill(0);
+
+  visualizerCard.classList.add('active');
+
+  function draw() {
+    animationId = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+
+    ctx.clearRect(0, 0, W, H);
+
+    const barW = (W / bins) * 0.6;
+    const gap = (W / bins) * 0.4;
+    const cx = H / 2;
+
+    for (let i = 0; i < bins; i++) {
+      const target = (data[i] / 255) * (H * 0.9);
+      smoothBars[i] += (target - smoothBars[i]) * 0.3;
+      const h = Math.max(3, smoothBars[i]);
+      const x = i * (barW + gap) + gap / 2;
+
+      const alpha = 0.35 + (smoothBars[i] / (H * 0.9)) * 0.65;
+      ctx.fillStyle = `rgba(155, 114, 230, ${alpha})`;
+
+      // Symmetric bars from center
+      const r = Math.min(barW / 2, h / 2);
+      ctx.beginPath();
+      ctx.roundRect(x, cx - h / 2, barW, h, r);
+      ctx.fill();
+    }
+  }
+
+  draw();
+}
+
+function stopVisualizer() {
+  if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  visualizerCard.classList.remove('active');
+  const ctx = waveCanvas.getContext('2d');
+  if (ctx) ctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+}
+
 ttsCheckbox.addEventListener('change', () => {
   ttsEnabled = ttsCheckbox.checked;
   speakBtn.style.display = ttsEnabled ? '' : 'none';
@@ -177,7 +248,7 @@ async function translate(text) {
   return (await res.json()).translation;
 }
 
-function startRecording() {
+async function startRecording() {
   if (isRecording) return;
   stopSpeaking();
   clearError();
@@ -187,6 +258,11 @@ function startRecording() {
     showError('A böngésző nem támogatja a hangfelismerést. Használj Chrome-ot Android/iOS eszközön.');
     return;
   }
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    startVisualizer(mediaStream);
+  } catch (_) { /* visualizer optional */ }
 
   isRecording = true;
   setStatus('recording');
@@ -219,6 +295,7 @@ function startRecording() {
 
   recognition.onerror = (e) => {
     isRecording = false;
+    stopVisualizer();
     setStatus('idle');
     if (e.error === 'no-speech') {
       showError('Nem érzékeltem hangot. Próbáld újra.');
@@ -231,6 +308,7 @@ function startRecording() {
 
   recognition.onend = async () => {
     isRecording = false;
+    stopVisualizer();
     const text = finalText.trim();
 
     if (!text) {
