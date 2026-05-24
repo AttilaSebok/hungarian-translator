@@ -19,80 +19,33 @@ const originalCard = document.getElementById('originalCard');
 
 let recognition = null;
 let isRecording = false;
+let manualStop = false;
 let lastTranslation = '';
 let isSpeaking = false;
 let ttsEnabled = false;
 
-// --- Visualizer ---
+// --- Visualizer (CSS bars — no getUserMedia conflict) ---
 const visualizerCard = document.getElementById('visualizerCard');
-const waveCanvas = document.getElementById('waveCanvas');
-let audioCtx = null;
-let analyser = null;
-let mediaStream = null;
-let animationId = null;
-let smoothBars = null;
+const barsContainer = document.getElementById('barsContainer');
+const BAR_COUNT = 20;
 
-function startVisualizer(stream) {
-  // Show card first so offsetWidth is readable
+// Build bars once
+for (let i = 0; i < BAR_COUNT; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  // Staggered delay + varied duration for natural look
+  const duration = 0.6 + Math.random() * 0.7;
+  const delay = (i / BAR_COUNT) * -1.2;
+  bar.style.cssText = `height:52px; animation-duration:${duration.toFixed(2)}s; animation-delay:${delay.toFixed(2)}s`;
+  barsContainer.appendChild(bar);
+}
+
+function startVisualizer() {
   visualizerCard.classList.add('active');
-
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 64;
-  analyser.smoothingTimeConstant = 0.75;
-
-  const source = audioCtx.createMediaStreamSource(stream);
-  source.connect(analyser);
-
-  const dpr = window.devicePixelRatio || 1;
-  const W = waveCanvas.offsetWidth || 300;
-  const H = 64;
-  waveCanvas.width = W * dpr;
-  waveCanvas.height = H * dpr;
-  const ctx = waveCanvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
-  const bins = analyser.frequencyBinCount;
-  const data = new Uint8Array(bins);
-  smoothBars = new Float32Array(bins).fill(0);
-
-  function draw() {
-    animationId = requestAnimationFrame(draw);
-    analyser.getByteFrequencyData(data);
-
-    ctx.clearRect(0, 0, W, H);
-
-    const barW = (W / bins) * 0.6;
-    const gap = (W / bins) * 0.4;
-    const cx = H / 2;
-
-    for (let i = 0; i < bins; i++) {
-      const target = (data[i] / 255) * (H * 0.9);
-      smoothBars[i] += (target - smoothBars[i]) * 0.3;
-      const h = Math.max(3, smoothBars[i]);
-      const x = i * (barW + gap) + gap / 2;
-
-      const alpha = 0.35 + (smoothBars[i] / (H * 0.9)) * 0.65;
-      ctx.fillStyle = `rgba(155, 114, 230, ${alpha})`;
-
-      // Symmetric bars from center
-      const r = Math.min(barW / 2, h / 2);
-      ctx.beginPath();
-      ctx.roundRect(x, cx - h / 2, barW, h, r);
-      ctx.fill();
-    }
-  }
-
-  draw();
 }
 
 function stopVisualizer() {
-  if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
-  if (audioCtx) { audioCtx.close(); audioCtx = null; }
-  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   visualizerCard.classList.remove('active');
-  const ctx = waveCanvas.getContext('2d');
-  if (ctx) ctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
 }
 
 ttsCheckbox.addEventListener('change', () => {
@@ -253,7 +206,7 @@ async function translate(text) {
   return (await res.json()).translation;
 }
 
-async function startRecording() {
+function startRecording() {
   if (isRecording) return;
   stopSpeaking();
   clearError();
@@ -264,12 +217,9 @@ async function startRecording() {
     return;
   }
 
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    startVisualizer(mediaStream);
-  } catch (_) { /* visualizer optional */ }
-
+  startVisualizer();
   isRecording = true;
+  manualStop = false;
   setStatus('recording');
   originalText.textContent = '';
   translationText.textContent = '';
@@ -278,52 +228,19 @@ async function startRecording() {
 
   let finalText = '';
   let silenceTimer = null;
-
+  let restartAttempts = 0;
   const SILENCE_MS = 2500;
+  const MAX_RESTARTS = 5;
 
   function resetSilenceTimer() {
     clearTimeout(silenceTimer);
     silenceTimer = setTimeout(() => stopRecording(), SILENCE_MS);
   }
 
-  recognition.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) {
-        finalText += t + ' ';
-        resetSilenceTimer();
-      } else {
-        interim += t;
-      }
-    }
-    originalText.textContent = finalText + interim;
-    results.classList.add('visible');
-  };
-
-  recognition.onerror = (e) => {
-    if (e.error === 'no-speech') return; // continuous mode fires this, ignore
+  async function doTranslate(text) {
     clearTimeout(silenceTimer);
     isRecording = false;
     stopVisualizer();
-    setStatus('idle');
-    if (e.error === 'not-allowed') {
-      showError('Mikrofon engedély megtagadva. Engedélyezd a böngésző beállításaiban.');
-    } else {
-      showError(`Hangfelismerési hiba: ${e.error}`);
-    }
-  };
-
-  recognition.onend = async () => {
-    clearTimeout(silenceTimer);
-    isRecording = false;
-    stopVisualizer();
-    const text = finalText.trim();
-
-    if (!text) {
-      setStatus('idle');
-      return;
-    }
 
     originalText.textContent = text;
     results.classList.add('visible');
@@ -341,6 +258,68 @@ async function startRecording() {
       showError(err.message);
       setStatus('idle');
     }
+  }
+
+  recognition.onresult = (e) => {
+    restartAttempts = 0; // successful result — reset counter
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        finalText += t + ' ';
+        resetSilenceTimer();
+      } else {
+        interim += t;
+      }
+    }
+    originalText.textContent = finalText + interim;
+    results.classList.add('visible');
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') return;
+    if (e.error === 'not-allowed') {
+      manualStop = true;
+      isRecording = false;
+      clearTimeout(silenceTimer);
+      stopVisualizer();
+      setStatus('idle');
+      showError('Mikrofon engedély megtagadva. Engedélyezd a böngésző beállításaiban.');
+    }
+    // network/audio-capture: onend will handle restart with delay
+  };
+
+  recognition.onend = async () => {
+    if (isRecording && !manualStop) {
+      if (restartAttempts < MAX_RESTARTS) {
+        restartAttempts++;
+        const delay = restartAttempts > 1 ? 800 : 200;
+        setTimeout(() => {
+          try { recognition.start(); } catch (_) {}
+        }, delay);
+        return;
+      } else {
+        // Too many failed restarts
+        isRecording = false;
+        stopVisualizer();
+        setStatus('idle');
+        if (finalText.trim()) {
+          await doTranslate(finalText.trim());
+        } else {
+          showError('A hangfelismerés nem elérhető. Ellenőrizd az internetkapcsolatot.');
+        }
+        return;
+      }
+    }
+
+    const text = finalText.trim();
+    if (!text) {
+      isRecording = false;
+      stopVisualizer();
+      setStatus('idle');
+      return;
+    }
+    await doTranslate(text);
   };
 
   recognition.start();
@@ -348,6 +327,7 @@ async function startRecording() {
 
 function stopRecording() {
   if (!isRecording || !recognition) return;
+  manualStop = true;
   recognition.stop();
 }
 
