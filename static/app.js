@@ -187,7 +187,7 @@ function initSpeechRecognition() {
 
   const r = new SpeechRecognition();
   r.lang = 'hu-HU';
-  r.continuous = false;
+  r.continuous = true;
   r.interimResults = true;
   r.maxAlternatives = 1;
   return r;
@@ -272,34 +272,37 @@ async function startRecording() {
   setSpeakBtn('idle');
 
   let finalText = '';
-  let interimTimeout = null;
+  let silenceTimer = null;
+
+  const SILENCE_MS = 2500;
+
+  function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => stopRecording(), SILENCE_MS);
+  }
 
   recognition.onresult = (e) => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
       if (e.results[i].isFinal) {
-        finalText += t;
+        finalText += t + ' ';
+        resetSilenceTimer();
       } else {
         interim += t;
       }
     }
     originalText.textContent = finalText + interim;
     results.classList.add('visible');
-
-    clearTimeout(interimTimeout);
-    if (interim) {
-      interimTimeout = setTimeout(() => stopRecording(), 2000);
-    }
   };
 
   recognition.onerror = (e) => {
+    if (e.error === 'no-speech') return; // continuous mode fires this, ignore
+    clearTimeout(silenceTimer);
     isRecording = false;
     stopVisualizer();
     setStatus('idle');
-    if (e.error === 'no-speech') {
-      showError('Nem érzékeltem hangot. Próbáld újra.');
-    } else if (e.error === 'not-allowed') {
+    if (e.error === 'not-allowed') {
       showError('Mikrofon engedély megtagadva. Engedélyezd a böngésző beállításaiban.');
     } else {
       showError(`Hangfelismerési hiba: ${e.error}`);
@@ -307,6 +310,7 @@ async function startRecording() {
   };
 
   recognition.onend = async () => {
+    clearTimeout(silenceTimer);
     isRecording = false;
     stopVisualizer();
     const text = finalText.trim();
