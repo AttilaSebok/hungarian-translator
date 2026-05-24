@@ -29,6 +29,9 @@ let animationId = null;
 let smoothBars = null;
 
 function startVisualizer(stream) {
+  // Show card first so offsetWidth is readable
+  visualizerCard.classList.add('active');
+
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 64;
@@ -38,7 +41,7 @@ function startVisualizer(stream) {
   source.connect(analyser);
 
   const dpr = window.devicePixelRatio || 1;
-  const W = waveCanvas.offsetWidth;
+  const W = waveCanvas.offsetWidth || 300;
   const H = 64;
   waveCanvas.width = W * dpr;
   waveCanvas.height = H * dpr;
@@ -48,8 +51,6 @@ function startVisualizer(stream) {
   const bins = analyser.frequencyBinCount;
   const data = new Uint8Array(bins);
   smoothBars = new Float32Array(bins).fill(0);
-
-  visualizerCard.classList.add('active');
 
   function draw() {
     animationId = requestAnimationFrame(draw);
