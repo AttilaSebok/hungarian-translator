@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#e8e0f5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HU→EN" />
+  <title>Magyar → Brit Angol Fordító</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="flag-pair">
+        <span class="flag">🇭🇺</span>
+        <span class="arrow-chip">HU → GB</span>
+        <span class="flag">🇬🇧</span>
+      </div>
+      <h1>Magyar → Brit Angol</h1>
+    </header>
+
+    <main>
+      <div class="tts-toggle-row">
+        <label class="tts-toggle" id="ttsToggle">
+          <input type="checkbox" id="ttsCheckbox" />
+          <span class="tts-track">
+            <span class="tts-thumb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+            </span>
+          </span>
+          <span class="tts-label">Hangos kiejtés</span>
+        </label>
+      </div>
+
+      <div class="record-section">
+        <button id="recordBtn" class="record-btn" aria-label="Felvétel indítása">
+          <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          <span id="recordLabel">Nyomj és beszélj</span>
+        </button>
+        <div id="statusPill" class="status-pill">
+          <div id="statusDot" class="status-dot"></div>
+          <span id="statusText"></span>
+        </div>
+      </div>
+
+      <div class="results" id="results">
+        <div class="card original-card" id="originalCard">
+          <div class="card-header">
+            <span class="card-flag">🇭🇺</span>
+            <span class="card-title">Eredeti</span>
+          </div>
+          <p class="card-text" id="originalText"></p>
+        </div>
+
+        <div class="divider-arrow"><span>↓</span></div>
+
+        <div class="card translation-card" id="translationCard">
+          <div class="card-header">
+            <span class="card-flag">🇬🇧</span>
+            <span class="card-title">Brit angol fordítás</span>
+            <button class="icon-btn" id="speakBtn" title="Felolvasás" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+            </button>
+            <button class="icon-btn" id="copyBtn" title="Másolás">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          </div>
+          <p class="card-text" id="translationText"></p>
+        </div>
+      </div>
+
+      <div class="error-box" id="errorBox"></div>
+    </main>
+
+    <footer>
+      <p>Mikrofon szükséges &bull; Működik offline &bull; Telepíthető</p>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
